@@ -3,6 +3,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include "hacking.h"
 
 void usage(char *prog_name, char *file_name) {
     printf("使用方法: %s <%sに追加するデータ>\n", prog_name, file_name);
@@ -13,12 +14,12 @@ void fatal(char *);             // 致命的なエラーが発生した際に使
 void *ec_malloc(unsigned int);  // malloc()とエラー判定をセットにした関数
 
 int main(int argc, char *argv[]) {
-    int fd; // ファイル記述子
+    int userid, fd; // ファイル記述子
     char *buffer, *datafile;
 
     buffer = (char *) ec_malloc(100);
     datafile = (char *) ec_malloc(20);
-    strcpy(datafile, "/tmp/notes");
+    strcpy(datafile, "/var/notes");
 
     if (argc < 2)                   // コマンドライン引数が与えられていない場合、
         usage(argv[0], datafile);   // 使用方法を表示して終了する。
@@ -35,9 +36,17 @@ int main(int argc, char *argv[]) {
     if (fd == -1)
         fatal("main()内、ファイルオープン中にエラーが発生しました。");
     printf("[DEBUG] ファイル記述子:%d\n", fd);
+
+    userid = getuid();  // 実ユーザIDを取得する。
+
 // データの書き込み
-    if (write(fd, buffer, strlen(buffer)) == -1)
+    if (write(fd, &userid, 4) == -1)    // メモの前にユーザIDを書き込む。
+        fatal("main()内、ファイルへのユーザIDの書き込みでエラーが発生しました。");
+    write(fd, "\n", 1); // 改行する。
+
+    if (write(fd, buffer, strlen(buffer)) == -1)    // メモを書き込む。
         fatal("main()内、ファイルへのバッファの書き込みでエラーが発生しました。");
+    write(fd, "\n", 1); // 改行する。
 // ファイルのクローズ
     if (close(fd) == -1)
         fatal("main()内、ファイルのクローズ中にエラーが発生しました。");
@@ -47,23 +56,4 @@ int main(int argc, char *argv[]) {
     free(datafile);
 
     return 0;
-}
-
-// エラーメッセージを表示した後、終了する関数
-void fatal(char *message) {
-    char error_message[100];
-
-    strcpy(error_message, "[!!] 致命的なエラー:");
-    strncat(error_message, message, 79);
-    perror(error_message);
-    exit(-1);
-}
-
-// malloc()とエラー判定をセットにした関数
-void *ec_malloc(unsigned int size) {
-    void *ptr;
-    ptr = malloc(size);
-    if (ptr == NULL)
-        fatal("ec_malloc()内のメモリ割り当てエラーが発生しました。");
-    return ptr;
 }
